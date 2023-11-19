@@ -1,0 +1,10 @@
+[package]
+name = "tfm-marlin"
+version = "0.1.0"
+edition = "2021"
+authors = ["Jesus Vico"]
+repository = "https://github.com/jesusvico/tfm-marlin"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
