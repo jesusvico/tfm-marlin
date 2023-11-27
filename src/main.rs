@@ -1,4 +1,4 @@
-use structopt::StructOpt;
+use clap::{Parser, arg, command};
 
 mod printers;
 mod dummy_circuit;
@@ -23,21 +23,24 @@ use ark_poly_commit::{marlin_pc::MarlinKZG10, sonic_pc::SonicKZG10};
 
 use blake2::Blake2s;
 
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Circuit to test
+    #[arg(short, long, default_value = "dummy")]
+    circuit: String,
 
+    /// Number of rounds
+    #[arg(short, long, default_value_t = 1)]
+    rounds: usize,
 
-#[derive(Debug, StructOpt)]
-struct Cli {
-    #[structopt(short, long, help = "Sets circuit to test")]
-    c: Option<String>,
+    // Field used by the system
+    #[arg(short, long, default_value = "BlsFr")]
+    field: String,
 
-    #[structopt(short, long, help = "Sets the number of rounds")]
-    r: Option<usize>,
-
-    #[structopt(short, long, help = "Sets field used by the system")]
-    f: Option<String>,
-
-    #[structopt(short, long, help = "Sets the arithmetization used by the system")]
-    a: Option<String>
+    // Arithmetization used by the system
+    #[arg(short, long, default_value = "MarlinKZG10")]
+    arithmetization: String,
 }
 
 enum Circuits {
@@ -121,36 +124,36 @@ macro_rules! bench_dummy {
 
 fn main() {
     // Accessing command-line arguments
-    let args = Cli::from_args();
+    let args = Args::parse();
 
     // Get the circuit
-    let circuit = match args.c.unwrap_or(String::from("dummy")).as_str() {
+    let circuit = match args.circuit.as_str() {
         "dummy" => Circuits::Dummy,
         "hash" => Circuits::Hash,
-        _ => print_panic!("Error")
+        _ => print_panic!("Invalid circuit {}", args.circuit.as_str())
     };
 
     // Get the number of rounds
-    let rounds = args.r.unwrap_or(1); // Default rounds is 1
+    let rounds = args.rounds;
     if rounds == 0 {
         print_panic("0 is not a valid number of rounds")
     }
 
     // Get the field
-    let field = match args.f.unwrap_or(String::from("BlsFr")).as_str() {
+    let field = match args.field.as_str() {
         "BlsFr" => Fields::BlsFr,
         "MNT4Fr" => Fields::MNT4Fr,
         "MNT4BigFr" => Fields::MNT4BigFr,
         "MNT6Fr" => Fields::MNT6Fr,
         "MNT6BigFr" => Fields::MNT6BigFr,
-        _ => panic!("Error")
+        _ => print_panic!("Invalid field {}", args.field.as_str())
     };
 
     // Get the arithmetization
-    let arithmetization = match args.a.unwrap_or(String::from("MarlinKZG10")).as_str() { 
+    let arithmetization = match args.arithmetization.as_str() { 
         "MarlinKZG10" => Arithmetizations::MarlinKZG10,
         "SonicKZG10" => Arithmetizations::SonicKZG10,
-        _ => panic!("Error")
+        _ => print_panic!("Invalid field {}", args.arithmetization.as_str())
     };
 
     // Execute the correct macro
