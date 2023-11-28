@@ -1,3 +1,4 @@
+use ark_ff::PrimeField;
 use clap::{Parser, arg, command};
 
 mod printers;
@@ -19,7 +20,7 @@ use ark_mnt6_298::{Fr as MNT6Fr, MNT6_298};
 use ark_mnt6_753::{Fr as MNT6BigFr, MNT6_753};
 
 use ark_poly::univariate::DensePolynomial;
-use ark_poly_commit::{marlin_pc::MarlinKZG10, sonic_pc::SonicKZG10};
+use ark_poly_commit::{marlin_pc::MarlinKZG10, sonic_pc::SonicKZG10, PolynomialCommitment};
 
 use blake2::Blake2s;
 
@@ -43,6 +44,7 @@ struct Args {
     arithmetization: String,
 }
 
+#[derive(Debug)]
 enum Circuits {
     Dummy,
     Hash
@@ -61,65 +63,44 @@ enum Arithmetizations {
     SonicKZG10
 }
 
-macro_rules! bench_dummy {
-    (
-        $bench_circuit:ident,
-        $bench_field:ty, 
-        $bench_pairing_engine:ty,
-        $bench_arithmetization:ident,
-        $bench_rounds:expr
-    ) => {
+fn bench
+    <
+        F: PrimeField,
+        C: ConstraintSynthesizer<F> + NewRandomCircuit + Copy,
+        A: PolynomialCommitment<F, DensePolynomial<F>>,
+    >(rounds: usize) {
 
-        print_info!(
-            "Benchmarking system {} {} {} {}",
-            stringify!($bench_circuit),
-            stringify!($bench_field),
-            stringify!($bench_pairing_engine),
-            stringify!($bench_arithmetization)
-        );
-
-        let num_variables = 3;
-        let num_constraints = $bench_rounds + 2;
+        print_info!("Benchmarking");
 
         let rng = &mut ark_std::test_rng();
-        let c = $bench_circuit::<$bench_field>::new_random(rng, $bench_rounds);
+        let c = C::new_random(rng, rounds);
 
         // First show the number of constraints
-        let cs = ConstraintSystem::<$bench_field>::new_ref();
-        let _ = c.generate_constraints(cs.clone());
+        let cs = ConstraintSystem::<F>::new_ref();
+        let _ = c.clone().generate_constraints(cs.clone());
         print_info!(
             "Number of constraints: {}", 
             cs.num_constraints()
         );
 
-        let srs = Marlin::<
-            $bench_field,
-            $bench_arithmetization<$bench_pairing_engine, DensePolynomial<$bench_field>>,
-            Blake2s,
-        >::universal_setup(num_constraints, num_variables, 3 * num_constraints, rng)
-        .unwrap();
+        let srs = Marlin::<F, A, Blake2s,>
+            ::universal_setup(1000, 10, 3 * 1000, rng)
+            .unwrap();
 
-        let (pk, _) = Marlin::<
-            $bench_field,
-            $bench_arithmetization<$bench_pairing_engine, DensePolynomial<$bench_field>>,
-            Blake2s,
-        >::index(&srs, c)
-        .unwrap();
+        let (pk, _) = Marlin::<F, A, Blake2s,>
+            ::index(&srs, c)
+            .unwrap();
 
         let start = std::time::Instant::now();
 
-        let _prove = Marlin::<
-            $bench_field,
-            $bench_arithmetization<$bench_pairing_engine, DensePolynomial<$bench_field>>,
-            Blake2s,
-        >::prove(&pk, c.clone(), rng)
-        .unwrap();
+        let _prove = Marlin::<F, A, Blake2s,>
+            ::prove(&pk, c.clone(), rng)
+            .unwrap();
 
         print_info!(
             "Proving time: {}ms", 
             start.elapsed().as_millis()
         );
-    }
 }
 
 fn main() {
@@ -159,35 +140,75 @@ fn main() {
     // Execute the correct macro
     match (circuit, field, arithmetization) {
         (Circuits::Dummy, Fields::BlsFr, Arithmetizations::MarlinKZG10) => {
-            bench_dummy!(DummyCircuit, BlsFr, Bls12_381, MarlinKZG10, rounds); 
+            bench::<
+                BlsFr, 
+                DummyCircuit<BlsFr>, 
+                MarlinKZG10<Bls12_381, DensePolynomial<BlsFr>>
+            >(rounds); 
         }
         (Circuits::Dummy, Fields::MNT4Fr, Arithmetizations::MarlinKZG10) => {
-            bench_dummy!(DummyCircuit, MNT4Fr, MNT4_298, MarlinKZG10, rounds);
+            bench::<
+                MNT4Fr, 
+                DummyCircuit<MNT4Fr>, 
+                MarlinKZG10<MNT4_298, DensePolynomial<MNT4Fr>>
+            >(rounds);
         }
         (Circuits::Dummy, Fields::MNT4BigFr, Arithmetizations::MarlinKZG10) => {
-            bench_dummy!(DummyCircuit, MNT4BigFr, MNT4_753, MarlinKZG10, rounds);
+            bench::<
+                MNT4BigFr, 
+                DummyCircuit<MNT4BigFr>, 
+                MarlinKZG10<MNT4_753, DensePolynomial<MNT4BigFr>>
+            >(rounds);
         }
         (Circuits::Dummy, Fields::MNT6Fr, Arithmetizations::MarlinKZG10) => {
-            bench_dummy!(DummyCircuit, MNT6Fr, MNT6_298, MarlinKZG10, rounds);
+            bench::<
+                MNT6Fr, 
+                DummyCircuit<MNT6Fr>, 
+                MarlinKZG10<MNT6_298, DensePolynomial<MNT6Fr>>
+            >(rounds);
         }
         (Circuits::Dummy, Fields::MNT6BigFr, Arithmetizations::MarlinKZG10) => {
-            bench_dummy!(DummyCircuit, MNT6BigFr, MNT6_753, MarlinKZG10, rounds);
+            bench::<
+                MNT6BigFr, 
+                DummyCircuit<MNT6BigFr>, 
+                MarlinKZG10<MNT6_753, DensePolynomial<MNT6BigFr>>
+            >(rounds);
         }
 
         (Circuits::Dummy, Fields::BlsFr, Arithmetizations::SonicKZG10) => {
-            bench_dummy!(DummyCircuit, BlsFr, Bls12_381, SonicKZG10, rounds); 
+            bench::<
+                BlsFr, 
+                DummyCircuit<BlsFr>, 
+                SonicKZG10<Bls12_381, DensePolynomial<BlsFr>>
+            >(rounds);
         }
         (Circuits::Dummy, Fields::MNT4Fr, Arithmetizations::SonicKZG10) => {
-            bench_dummy!(DummyCircuit, MNT4Fr, MNT4_298, SonicKZG10, rounds);
+            bench::<
+                MNT4Fr, 
+                DummyCircuit<MNT4Fr>, 
+                SonicKZG10<MNT4_298, DensePolynomial<MNT4Fr>>
+            >(rounds);
         }
         (Circuits::Dummy, Fields::MNT4BigFr, Arithmetizations::SonicKZG10) => {
-            bench_dummy!(DummyCircuit, MNT4BigFr, MNT4_753, SonicKZG10, rounds);
+            bench::<
+                MNT4BigFr, 
+                DummyCircuit<MNT4BigFr>, 
+                SonicKZG10<MNT4_753, DensePolynomial<MNT4BigFr>>
+            >(rounds);
         }
         (Circuits::Dummy, Fields::MNT6Fr, Arithmetizations::SonicKZG10) => {
-            bench_dummy!(DummyCircuit, MNT6Fr, MNT6_298, SonicKZG10, rounds);
+            bench::<
+                MNT6Fr, 
+                DummyCircuit<MNT6Fr>, 
+                SonicKZG10<MNT6_298, DensePolynomial<MNT6Fr>>
+            >(rounds);
         }
         (Circuits::Dummy, Fields::MNT6BigFr, Arithmetizations::SonicKZG10) => {
-            bench_dummy!(DummyCircuit, MNT6BigFr, MNT6_753, SonicKZG10, rounds);
+            bench::<
+                MNT6BigFr, 
+                DummyCircuit<MNT6BigFr>, 
+                SonicKZG10<MNT6_753, DensePolynomial<MNT6BigFr>>
+            >(rounds);
         }
         _ => print_panic("Invalid")
     }
