@@ -1,99 +1,108 @@
-use ark_ff::PrimeField;
 use clap::{Parser, arg, command};
 
 mod printers;
-mod dummy_circuit;
 mod circuit_traits;
+mod dummy_circuit;
+mod product_circuit;
 
 use printers::*;
 
-use ark_relations::r1cs::{ConstraintSystem, ConstraintSynthesizer};
+use ark_relations::r1cs::{ConstraintSystem, ConstraintSynthesizer, OptimizationGoal};
 use dummy_circuit::DummyCircuit;
-use circuit_traits::NewRandomCircuit;
+use product_circuit::ProductCircuit;
+use circuit_traits::BenchCircuit;
 
 use ark_marlin::Marlin;
 
-use ark_bls12_381::{Fr as BlsFr, Bls12_381};
+use ark_poly_commit::marlin_pc::MarlinKZG10;
+use ark_poly::univariate::DensePolynomial;
+use blake2::Blake2s;
+
+use ark_bls12_377::{Fr as Bls377Fr, Bls12_377};
+use ark_bls12_381::{Fr as Bls381Fr, Bls12_381};
 use ark_mnt4_298::{Fr as MNT4Fr, MNT4_298};
 use ark_mnt4_753::{Fr as MNT4BigFr, MNT4_753};
 use ark_mnt6_298::{Fr as MNT6Fr, MNT6_298};
 use ark_mnt6_753::{Fr as MNT6BigFr, MNT6_753};
 
-use ark_poly::univariate::DensePolynomial;
-use ark_poly_commit::{marlin_pc::MarlinKZG10, sonic_pc::SonicKZG10, PolynomialCommitment};
-
-use blake2::Blake2s;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
     /// Circuit to test
     #[arg(short, long, default_value = "dummy")]
-    circuit: String,
+    system: String,
 
     /// Number of rounds
     #[arg(short, long, default_value_t = 1)]
     rounds: usize,
 
     // Field used by the system
-    #[arg(short, long, default_value = "BlsFr")]
-    field: String,
-
-    // Arithmetization used by the system
-    #[arg(short, long, default_value = "MarlinKZG10")]
-    arithmetization: String,
+    #[arg(short, long, default_value = "bls12_381")]
+    curve: String,
 }
 
-#[derive(Debug)]
-enum Circuits {
-    Dummy,
-    Hash
-}
+macro_rules! bench {
+    ($circuit:ident, $field:ty, $pairing_engine:ty, $rounds:expr) => {
 
-enum Fields {
-    BlsFr,
-    MNT4Fr,
-    MNT4BigFr,
-    MNT6Fr,
-    MNT6BigFr
-}
-
-enum Arithmetizations {
-    MarlinKZG10,
-    SonicKZG10
-}
-
-fn bench
-    <
-        F: PrimeField,
-        C: ConstraintSynthesizer<F> + NewRandomCircuit + Copy,
-        A: PolynomialCommitment<F, DensePolynomial<F>>,
-    >(rounds: usize) {
-
-        print_info!("Benchmarking");
-
+        print_info!(
+            "Benchmarking {} {}, rounds: {}",
+            stringify!($circuit),
+            stringify!($pairing_engine),
+            $rounds
+        );
+        
         let rng = &mut ark_std::test_rng();
-        let c = C::new_random(rng, rounds);
+        let c = $circuit::<$field>::new_random(rng, $rounds);
 
-        // First show the number of constraints
-        let cs = ConstraintSystem::<F>::new_ref();
+        // Generate the constraint system without optimizations
+        let cs = ConstraintSystem::<$field>::new_ref();
+        cs.set_optimization_goal(OptimizationGoal::None);
+
+        // Show the number of constraints
+        cs.finalize();
+        println!("{}", cs.is_satisfied().unwrap());
         let _ = c.clone().generate_constraints(cs.clone());
         print_info!(
             "Number of constraints: {}", 
             cs.num_constraints()
         );
 
-        let srs = Marlin::<F, A, Blake2s,>
+        // Get the matrices
+        let matrices = cs.to_matrices().unwrap();
+        print_info!(
+            "Non-zeros -  A: {:?}, B: {}, C: {}", 
+            matrices.a_num_non_zero,
+            matrices.b_num_non_zero,
+            matrices.c_num_non_zero,
+        );
+
+
+        let mut x = 0;
+        for outer_vec in &matrices.a {
+            let mut y = 0;
+            for inner_tuple in outer_vec {
+                println!("({},{}) {} {}", x, y, inner_tuple.0, inner_tuple.1);
+                y += 1;
+            }
+            x += 1;
+        }
+
+
+        // Generate the SRS
+        let srs = Marlin::<$field, MarlinKZG10<$pairing_engine, DensePolynomial<$field>>, Blake2s>
             ::universal_setup(1000, 10, 3 * 1000, rng)
             .unwrap();
 
-        let (pk, _) = Marlin::<F, A, Blake2s,>
-            ::index(&srs, c)
+        // Generate the setup 
+        let (pk, vk) = Marlin::<$field, MarlinKZG10<$pairing_engine, DensePolynomial<$field>>, Blake2s>
+            ::index(&srs, c.clone())
             .unwrap();
 
+        // Generate the proof
         let start = std::time::Instant::now();
 
-        let _prove = Marlin::<F, A, Blake2s,>
+        let proof = Marlin::<$field, MarlinKZG10<$pairing_engine, DensePolynomial<$field>>, Blake2s>
             ::prove(&pk, c.clone(), rng)
             .unwrap();
 
@@ -101,6 +110,20 @@ fn bench
             "Proving time: {}ms", 
             start.elapsed().as_millis()
         );
+
+        // Check the proof
+        let start = std::time::Instant::now();
+
+        let res = Marlin::<$field, MarlinKZG10<$pairing_engine, DensePolynomial<$field>>, Blake2s>
+            ::verify(&vk, &[c.get_result()], &proof, rng)
+            .unwrap();
+        print_info!("Verification: {}", res);
+
+        print_info!(
+            "Verifying time: {}ms", 
+            start.elapsed().as_millis()
+        );
+    };
 }
 
 fn main() {
@@ -108,11 +131,7 @@ fn main() {
     let args = Args::parse();
 
     // Get the circuit
-    let circuit = match args.circuit.as_str() {
-        "dummy" => Circuits::Dummy,
-        "hash" => Circuits::Hash,
-        _ => print_panic!("Invalid circuit {}", args.circuit.as_str())
-    };
+    let circuit_name = args.system.as_str();
 
     // Get the number of rounds
     let rounds = args.rounds;
@@ -120,96 +139,67 @@ fn main() {
         print_panic("0 is not a valid number of rounds")
     }
 
-    // Get the field
-    let field = match args.field.as_str() {
-        "BlsFr" => Fields::BlsFr,
-        "MNT4Fr" => Fields::MNT4Fr,
-        "MNT4BigFr" => Fields::MNT4BigFr,
-        "MNT6Fr" => Fields::MNT6Fr,
-        "MNT6BigFr" => Fields::MNT6BigFr,
-        _ => print_panic!("Invalid field {}", args.field.as_str())
-    };
+    // Get the curve
+    let curve_name = args.curve.as_str();
 
-    // Get the arithmetization
-    let arithmetization = match args.arithmetization.as_str() { 
-        "MarlinKZG10" => Arithmetizations::MarlinKZG10,
-        "SonicKZG10" => Arithmetizations::SonicKZG10,
-        _ => print_panic!("Invalid field {}", args.arithmetization.as_str())
-    };
+    match (circuit_name, curve_name) {
+        ("dummy", "bls12_377") => {bench!(DummyCircuit, Bls377Fr, Bls12_377, rounds);},
+        ("dummy", "bls12_381") => {bench!(DummyCircuit, Bls381Fr, Bls12_381, rounds);},
+        ("dummy", "mnt4_298") => {bench!(DummyCircuit, MNT4Fr, MNT4_298, rounds);},
+        ("dummy", "mnt4_753") => {bench!(DummyCircuit, MNT4BigFr, MNT4_753, rounds);},
+        ("dummy", "mnt6_298") => {bench!(DummyCircuit, MNT6Fr, MNT6_298, rounds);},
+        ("dummy", "mnt6_753") => {bench!(DummyCircuit, MNT6BigFr, MNT6_753, rounds);},
 
-    // Execute the correct macro
-    match (circuit, field, arithmetization) {
-        (Circuits::Dummy, Fields::BlsFr, Arithmetizations::MarlinKZG10) => {
-            bench::<
-                BlsFr, 
-                DummyCircuit<BlsFr>, 
-                MarlinKZG10<Bls12_381, DensePolynomial<BlsFr>>
-            >(rounds); 
-        }
-        (Circuits::Dummy, Fields::MNT4Fr, Arithmetizations::MarlinKZG10) => {
-            bench::<
-                MNT4Fr, 
-                DummyCircuit<MNT4Fr>, 
-                MarlinKZG10<MNT4_298, DensePolynomial<MNT4Fr>>
-            >(rounds);
-        }
-        (Circuits::Dummy, Fields::MNT4BigFr, Arithmetizations::MarlinKZG10) => {
-            bench::<
-                MNT4BigFr, 
-                DummyCircuit<MNT4BigFr>, 
-                MarlinKZG10<MNT4_753, DensePolynomial<MNT4BigFr>>
-            >(rounds);
-        }
-        (Circuits::Dummy, Fields::MNT6Fr, Arithmetizations::MarlinKZG10) => {
-            bench::<
-                MNT6Fr, 
-                DummyCircuit<MNT6Fr>, 
-                MarlinKZG10<MNT6_298, DensePolynomial<MNT6Fr>>
-            >(rounds);
-        }
-        (Circuits::Dummy, Fields::MNT6BigFr, Arithmetizations::MarlinKZG10) => {
-            bench::<
-                MNT6BigFr, 
-                DummyCircuit<MNT6BigFr>, 
-                MarlinKZG10<MNT6_753, DensePolynomial<MNT6BigFr>>
-            >(rounds);
-        }
+        ("product", "bls12_381") => {bench!(ProductCircuit, Bls381Fr, Bls12_381, rounds);},
 
-        (Circuits::Dummy, Fields::BlsFr, Arithmetizations::SonicKZG10) => {
-            bench::<
-                BlsFr, 
-                DummyCircuit<BlsFr>, 
-                SonicKZG10<Bls12_381, DensePolynomial<BlsFr>>
-            >(rounds);
-        }
-        (Circuits::Dummy, Fields::MNT4Fr, Arithmetizations::SonicKZG10) => {
-            bench::<
-                MNT4Fr, 
-                DummyCircuit<MNT4Fr>, 
-                SonicKZG10<MNT4_298, DensePolynomial<MNT4Fr>>
-            >(rounds);
-        }
-        (Circuits::Dummy, Fields::MNT4BigFr, Arithmetizations::SonicKZG10) => {
-            bench::<
-                MNT4BigFr, 
-                DummyCircuit<MNT4BigFr>, 
-                SonicKZG10<MNT4_753, DensePolynomial<MNT4BigFr>>
-            >(rounds);
-        }
-        (Circuits::Dummy, Fields::MNT6Fr, Arithmetizations::SonicKZG10) => {
-            bench::<
-                MNT6Fr, 
-                DummyCircuit<MNT6Fr>, 
-                SonicKZG10<MNT6_298, DensePolynomial<MNT6Fr>>
-            >(rounds);
-        }
-        (Circuits::Dummy, Fields::MNT6BigFr, Arithmetizations::SonicKZG10) => {
-            bench::<
-                MNT6BigFr, 
-                DummyCircuit<MNT6BigFr>, 
-                SonicKZG10<MNT6_753, DensePolynomial<MNT6BigFr>>
-            >(rounds);
-        }
-        _ => print_panic("Invalid")
+        _ => print_panic!("Invalid circuit {} or curve {}", circuit_name, curve_name)
     }
+
+
+    /*let c = ProductCircuit {
+        x: Bls381Fr::from(1),
+        t: 3
+    };
+
+    // Generate the constraint system without optimizations
+    let cs = ConstraintSystem::<Bls381Fr>::new_ref();
+    cs.set_optimization_goal(OptimizationGoal::None);
+
+    // Show the number of constraints
+    //cs.finalize();
+    let _ = c.generate_constraints(cs.clone());
+    println!("{}", cs.num_constraints());
+
+    // Get the matrices
+    let matrices = cs.to_matrices().unwrap();
+    let mut x = 0;
+    let mut y = 0;
+    for outer_vec in &matrices.a {
+        for inner_tuple in outer_vec {
+            println!("({},{}) {} {}", x, y, inner_tuple.0, inner_tuple.1);
+            x += 1;
+        }
+        y += 1;
+    }
+
+    let mut x = 0;
+    let mut y = 0;
+    for outer_vec in &matrices.b {
+        for inner_tuple in outer_vec {
+            println!("({},{}) {} {}", x, y, inner_tuple.0, inner_tuple.1);
+            x += 1;
+        }
+        y += 1;
+    }
+
+    let mut x = 0;
+    let mut y = 0;
+    for outer_vec in &matrices.c {
+        for inner_tuple in outer_vec {
+            println!("({},{}) {} {}", x, y, inner_tuple.0, inner_tuple.1);
+            x += 1;
+        }
+        y += 1;
+    }*/
+
 }

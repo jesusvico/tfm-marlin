@@ -1,6 +1,5 @@
 use ark_ff::PrimeField;
-use ark_std::rand::RngCore;
-use arkworks_r1cs_gadgets::poseidon::{FieldHasherGadget, PoseidonGadget};
+use arkworks_r1cs_gadgets::poseidon::FieldHasherGadget;
 
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 use ark_r1cs_std::{alloc::AllocVar, eq::EqGadget, fields::fp::FpVar};
@@ -8,22 +7,20 @@ use ark_r1cs_std::{alloc::AllocVar, eq::EqGadget, fields::fp::FpVar};
 use arkworks_utils::{
     bytes_matrix_to_f, bytes_vec_to_f, poseidon_params::setup_poseidon_params, Curve,
 };
-use arkworks_native_gadgets::poseidon::{sbox::PoseidonSbox, PoseidonParameters, Poseidon};
-
-use super::circuit_traits::NewRandomCircuit;
+use arkworks_native_gadgets::poseidon::{sbox::PoseidonSbox, PoseidonParameters};
 
 // This cirtcuit executes H(a)=c
-#[derive(Clone)]
-pub struct PoseidonCircuit<F: PrimeField> {
+#[derive(Copy, Clone)]
+pub struct PoseidonCircuit<F: PrimeField, HG: FieldHasherGadget<F>> {
 	pub a: F,
 	pub c: F,
-	hasher: Poseidon<F>,
+	hasher: HG::Native,
 }
 
 /// Constructor for PoseidonCircuit
 #[allow(dead_code)]
-impl<F: PrimeField> PoseidonCircuit<F> {
-	pub fn new(a: F, c: F, hasher: Poseidon<F>) -> Self {
+impl<F: PrimeField, HG: FieldHasherGadget<F>> PoseidonCircuit<F, HG> {
+	pub fn new(a: F, c: F, hasher: HG::Native) -> Self {
 		Self { a, c, hasher }
 	}
 
@@ -46,20 +43,11 @@ impl<F: PrimeField> PoseidonCircuit<F> {
 	}
 }
 
-impl<F: PrimeField> NewRandomCircuit for PoseidonCircuit<F> {
-	fn new_random<R: RngCore>(rng: &mut R, rounds: usize) -> Self {
-		let parameters = Self::setup_params(Curve::Bls381, 5, 3);
-		let hasher = Poseidon::<F>::new(parameters);
-
-		Self::new(<F>::rand(rng), <F>::rand(rng), hasher)
-	}
-}
-
-impl<F: PrimeField> ConstraintSynthesizer<F> for PoseidonCircuit<F> {
+impl<F: PrimeField, HG: FieldHasherGadget<F>> ConstraintSynthesizer<F> for PoseidonCircuit<F, HG> {
 	fn generate_constraints(self, cs: ConstraintSystemRef<F>) -> Result<(), SynthesisError> {
         let a = FpVar::new_witness(cs.clone(), || Ok(self.a))?;
 		let res_target = FpVar::<F>::new_input(cs.clone(), || Ok(&self.c))?;
-		let hasher_gadget: PoseidonGadget<F> = FieldHasherGadget::<F>::from_native(&mut cs.clone(), self.hasher)?;
+		let hasher_gadget: HG = FieldHasherGadget::<F>::from_native(&mut cs.clone(), self.hasher)?;
 
 		let mut res_var = hasher_gadget.hash(&[a])?;
 		res_var = hasher_gadget.hash(&[res_var])?;

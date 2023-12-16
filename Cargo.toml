@@ -17,16 +17,21 @@ ark-std = { version = "^0.3.0", default-features = false }
 ark-poly = { version = "^0.3.0", default-features = false }
 ark-relations = { version = "^0.3.0", default-features = false }
 ark-poly-commit = { version = "^0.3.0", default-features = false }
+ark-ec = { version = "^0.3.0", default-features = false }
 
 blake2 = { version = "0.9", default-features = false }
 
 ark-bls12-381 = { version = "^0.3.0", default-features = false, features = [ "curve" ] }
+ark-bls12-377 = { version = "^0.3.0", default-features = false, features = [ "curve" ] }
 ark-mnt4-298 = { version = "^0.3.0", default-features = false, features = ["r1cs", "curve"] }
 ark-mnt6-298 = { version = "^0.3.0", default-features = false, features = ["r1cs"] }
 ark-mnt4-753 = { version = "^0.3.0", default-features = false, features = ["r1cs", "curve"] }
 ark-mnt6-753 = { version = "^0.3.0", default-features = false, features = ["r1cs"] }
 
-
+ark-r1cs-std = "^0.3.0"
+arkworks-r1cs-gadgets = "^1.2.0"
+arkworks-native-gadgets = "^1.2.0"
+arkworks-utils = { version = "1.0.1", default-features = false, features = ["poseidon_bn254_x5_2", "poseidon_bn254_x5_3", "poseidon_bn254_x5_4", "poseidon_bn254_x5_5", "poseidon_bls381_x5_3"] }
 
 [dev-dependencies]
 ark-r1cs-std = "^0.3.0"
