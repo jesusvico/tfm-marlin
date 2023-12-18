@@ -1,14 +1,17 @@
+use ark_ff::PrimeField;
 use clap::{Parser, arg, command};
 
 mod printers;
 mod circuit_traits;
 mod dummy_circuit;
+mod dummy2_circuit;
 mod product_circuit;
 
 use printers::*;
 
 use ark_relations::r1cs::{ConstraintSystem, ConstraintSynthesizer, OptimizationGoal};
 use dummy_circuit::DummyCircuit;
+use dummy2_circuit::Dummy2Circuit;
 use product_circuit::ProductCircuit;
 use circuit_traits::BenchCircuit;
 
@@ -25,6 +28,7 @@ use ark_mnt4_753::{Fr as MNT4BigFr, MNT4_753};
 use ark_mnt6_298::{Fr as MNT6Fr, MNT6_298};
 use ark_mnt6_753::{Fr as MNT6BigFr, MNT6_753};
 
+use num_bigint::BigUint;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -40,6 +44,26 @@ struct Args {
     // Field used by the system
     #[arg(short, long, default_value = "bls12_381")]
     curve: String,
+}
+
+fn prettify_matrix<T: PrimeField>(num_witness: usize, matrix: Vec<Vec<(T, usize)>>) 
+    -> Vec<Vec<BigUint>> {
+    // The matrix size is the number of witness x constraints
+
+    // Create a new matrix
+    let mut new_matrix: Vec<Vec<BigUint>> = Vec::new();
+
+    for i in matrix {
+        let mut new_vec = vec![BigUint::from(0 as usize); num_witness];
+        for j in i {
+            if let Some(element) = new_vec.get_mut(j.1 - 1) {
+                *element = j.0.into();  // Store the BigUint
+            }
+        }
+        new_matrix.push(new_vec);
+    }
+
+    new_matrix
 }
 
 macro_rules! bench {
@@ -61,32 +85,33 @@ macro_rules! bench {
 
         // Show the number of constraints
         cs.finalize();
-        println!("{}", cs.is_satisfied().unwrap());
         let _ = c.clone().generate_constraints(cs.clone());
         print_info!(
-            "Number of constraints: {}", 
-            cs.num_constraints()
+            "Number of constraints: {}, Variables: {}", 
+            cs.num_constraints(),
+            cs.num_witness_variables()
         );
 
         // Get the matrices
         let matrices = cs.to_matrices().unwrap();
         print_info!(
-            "Non-zeros -  A: {:?}, B: {}, C: {}", 
+            "R1CS non-zeros -  A: {}, B: {}, C: {}", 
             matrices.a_num_non_zero,
             matrices.b_num_non_zero,
             matrices.c_num_non_zero,
         );
 
 
-        let mut x = 0;
-        for outer_vec in &matrices.a {
-            let mut y = 0;
-            for inner_tuple in outer_vec {
-                println!("({},{}) {} {}", x, y, inner_tuple.0, inner_tuple.1);
-                y += 1;
-            }
-            x += 1;
-        }
+        print_info!("A: {:?}",
+            prettify_matrix(cs.num_witness_variables() + 1, matrices.a)
+        );
+        print_info!("B: {:?}",
+            prettify_matrix(cs.num_witness_variables() + 1, matrices.b)
+        );
+        print_info!("C: {:?}",
+            prettify_matrix(cs.num_witness_variables() + 1, matrices.c)
+        );
+        
 
 
         // Generate the SRS
@@ -143,63 +168,28 @@ fn main() {
     let curve_name = args.curve.as_str();
 
     match (circuit_name, curve_name) {
-        ("dummy", "bls12_377") => {bench!(DummyCircuit, Bls377Fr, Bls12_377, rounds);},
         ("dummy", "bls12_381") => {bench!(DummyCircuit, Bls381Fr, Bls12_381, rounds);},
+        ("dummy", "bls12_377") => {bench!(DummyCircuit, Bls377Fr, Bls12_377, rounds);},
         ("dummy", "mnt4_298") => {bench!(DummyCircuit, MNT4Fr, MNT4_298, rounds);},
         ("dummy", "mnt4_753") => {bench!(DummyCircuit, MNT4BigFr, MNT4_753, rounds);},
         ("dummy", "mnt6_298") => {bench!(DummyCircuit, MNT6Fr, MNT6_298, rounds);},
         ("dummy", "mnt6_753") => {bench!(DummyCircuit, MNT6BigFr, MNT6_753, rounds);},
 
         ("product", "bls12_381") => {bench!(ProductCircuit, Bls381Fr, Bls12_381, rounds);},
+        ("product", "bls12_377") => {bench!(ProductCircuit, Bls377Fr, Bls12_377, rounds);},
+        ("product", "mnt4_298") => {bench!(ProductCircuit, MNT4Fr, MNT4_298, rounds);},
+        ("product", "mnt4_753") => {bench!(ProductCircuit, MNT4BigFr, MNT4_753, rounds);},
+        ("product", "mnt6_298") => {bench!(ProductCircuit, MNT6Fr, MNT6_298, rounds);},
+        ("product", "mnt6_753") => {bench!(ProductCircuit, MNT6BigFr, MNT6_753, rounds);},
+
+        ("addition", "bls12_381") => {bench!(Dummy2Circuit, Bls381Fr, Bls12_381, rounds);},
+        ("addition", "bls12_377") => {bench!(Dummy2Circuit, Bls377Fr, Bls12_377, rounds);},
+        ("addition", "mnt4_298") => {bench!(Dummy2Circuit, MNT4Fr, MNT4_298, rounds);},
+        ("addition", "mnt4_753") => {bench!(Dummy2Circuit, MNT4BigFr, MNT4_753, rounds);},
+        ("addition", "mnt6_298") => {bench!(Dummy2Circuit, MNT6Fr, MNT6_298, rounds);},
+        ("addition", "mnt6_753") => {bench!(Dummy2Circuit, MNT6BigFr, MNT6_753, rounds);},
 
         _ => print_panic!("Invalid circuit {} or curve {}", circuit_name, curve_name)
     }
-
-
-    /*let c = ProductCircuit {
-        x: Bls381Fr::from(1),
-        t: 3
-    };
-
-    // Generate the constraint system without optimizations
-    let cs = ConstraintSystem::<Bls381Fr>::new_ref();
-    cs.set_optimization_goal(OptimizationGoal::None);
-
-    // Show the number of constraints
-    //cs.finalize();
-    let _ = c.generate_constraints(cs.clone());
-    println!("{}", cs.num_constraints());
-
-    // Get the matrices
-    let matrices = cs.to_matrices().unwrap();
-    let mut x = 0;
-    let mut y = 0;
-    for outer_vec in &matrices.a {
-        for inner_tuple in outer_vec {
-            println!("({},{}) {} {}", x, y, inner_tuple.0, inner_tuple.1);
-            x += 1;
-        }
-        y += 1;
-    }
-
-    let mut x = 0;
-    let mut y = 0;
-    for outer_vec in &matrices.b {
-        for inner_tuple in outer_vec {
-            println!("({},{}) {} {}", x, y, inner_tuple.0, inner_tuple.1);
-            x += 1;
-        }
-        y += 1;
-    }
-
-    let mut x = 0;
-    let mut y = 0;
-    for outer_vec in &matrices.c {
-        for inner_tuple in outer_vec {
-            println!("({},{}) {} {}", x, y, inner_tuple.0, inner_tuple.1);
-            x += 1;
-        }
-        y += 1;
-    }*/
 
 }

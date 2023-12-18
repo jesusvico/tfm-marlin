@@ -10,6 +10,7 @@ repository = "https://github.com/jesusvico/tfm-marlin"
 [dependencies]
 clap = { version = "4.4.9", features = ["derive"] }
 colored = "2" # For printing different colors
+num-bigint = "0.4.4"
 ark-marlin = { version = "^0.3.0", default-features = false }
 ark-serialize = { version = "^0.3.0", default-features = false, features = [ "derive" ] }
 ark-ff = { version = "^0.3.0", default-features = false }

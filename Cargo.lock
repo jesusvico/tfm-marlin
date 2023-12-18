@@ -802,6 +802,7 @@ dependencies = [
  "blake2",
  "clap",
  "colored",
+ "num-bigint",
 ]
 
 [[package]]

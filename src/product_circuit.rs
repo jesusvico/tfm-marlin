@@ -44,9 +44,9 @@ impl<F: PrimeField> ConstraintSynthesizer<F> for ProductCircuit<F> {
         let x = cs.new_witness_variable(|| Ok(x_val))?;
 
 
-        let mut new_val = x_val;
+        let mut new_val;
+        let mut new;
         let mut old_val = x_val;
-        let mut new = x;
         let mut old = x;
 
         for _ in 0..(self.t - 2) {
