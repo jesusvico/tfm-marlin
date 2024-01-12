@@ -42,10 +42,3 @@ arkworks-utils = { version = "1.0.1", default-features = false, features = ["pos
 
 [features]
 print-trace = [ "ark-std/print-trace" ]
-
-# cargo bench --features "print-trace" -- --nocapture | grep -E "Committing to third round polys|Info:"
-[[bench]]
-name = "tfm-marlin-benches"
-path = "benches/bench.rs"
-harness = false
-

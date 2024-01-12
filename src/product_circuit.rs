@@ -34,7 +34,8 @@ impl<F: PrimeField> BenchCircuit<F> for ProductCircuit<F> {
 impl<F: PrimeField> ConstraintSynthesizer<F> for ProductCircuit<F> {
     fn generate_constraints(self, cs: ConstraintSystemRef<F>) -> Result<(), SynthesisError> {
         /*
-            w = [1, x, x^2, ..., x^t = out]
+            w = [x, x^2, ..., x^t]
+            out = x^t
             The minimum t is 3 because of this issue:
             https://github.com/arkworks-rs/marlin/issues/79
         */
