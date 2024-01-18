@@ -1,7 +1,7 @@
 #!/bin/bash
 
 curve="bls12_381"
-systems=("basic" "product" "addition" "dense" "fibonacci" "sumprod" "sum")
+systems=("basic" "product" "addition" "dense" "fibonacci" "fibonacci2" "fibonacci3" "sum" "sumprod")
 
 # Generate the rounds interval
 rounds=()
@@ -11,7 +11,7 @@ for ((i = $rounds_min; i <= $rounds_max; i += 1)); do
     rounds+=($((2**$i)))
 done
 
-# 1: Perform the benchmarks
+# Perform the benchmarks
 if [ "$1" == "bench" ]; then
     for system in "${systems[@]}"; do
         echo "Executing $system over $curve curve"
@@ -66,14 +66,14 @@ generate_csv () {
     done
 }
 
-# 1: Indexer time
+# Indexer times
 generate_csv "csv/circuits-indexer-time.csv" "Marlin::Index"
 
 generate_csv "csv/circuits-indexer-ahp-time.csv" "AHP::Index"
 generate_csv "csv/circuits-indexer-commit-time.csv" "Commit to index polynomials"
 
 
-# 2: Prover time
+# Prover times
 generate_csv "csv/circuits-prover-time.csv" "Marlin::Prove"
 
 generate_csv "csv/circuits-prover-first-time.csv" "Committing to first round polys"
@@ -81,7 +81,7 @@ generate_csv "csv/circuits-prover-second-time.csv" "Committing to second round p
 generate_csv "csv/circuits-prover-third-time.csv" "Committing to third round polys"
 
 
-# 3: Verifier time
+# Verifier time
 generate_csv "csv/circuits-verifier-time.csv" "Marlin::Verify"
 
 

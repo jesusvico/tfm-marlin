@@ -3,14 +3,16 @@
 project := tfm-marlin
 program := target/release/$(project)
 
-all: $(program) tests
+all: $(program)
 
 $(program):
 	cargo build --release --features print-trace
 
-tests:
+tests: $(program)
 	mkdir -p logs
 	mkdir -p csv
+	./circuits-bench.sh bench
+	./curves-bench.sh bench
 
 clear:
-	rm -rf target logs csv
+	rm -rf logs csv target

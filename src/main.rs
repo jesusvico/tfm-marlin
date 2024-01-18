@@ -8,6 +8,8 @@ mod addition_circuit;
 mod product_circuit;
 mod dense_circuit;
 mod fibonacci_circuit;
+mod fibonacci2_circuit;
+mod fibonacci3_circuit;
 mod sum_circuit;
 mod sumprod_circuit;
 
@@ -20,6 +22,8 @@ use product_circuit::ProductCircuit;
 use circuit_traits::BenchCircuit;
 use dense_circuit::DenseCircuit;
 use fibonacci_circuit::FibonacciCircuit;
+use fibonacci2_circuit::Fibonacci2Circuit;
+use fibonacci3_circuit::Fibonacci3Circuit;
 use sum_circuit::SumCircuit;
 use sumprod_circuit::SumProdCircuit;
 
@@ -122,7 +126,7 @@ macro_rules! bench {
             (matrix_num_values - matrices.c_num_non_zero) * 100 / matrix_num_values,
         );
 
-        print_info!("A: {:?}",
+        /*print_info!("A: {:?}",
             prettify_matrix(cs.num_witness_variables() + 1, matrices.a)
         );
         print_info!("B: {:?}",
@@ -130,11 +134,12 @@ macro_rules! bench {
         );
         print_info!("C: {:?}",
             prettify_matrix(cs.num_witness_variables() + 1, matrices.c)
-        );
+        );*/
 
+        let num_non_zeros = matrices.a_num_non_zero.max(matrices.b_num_non_zero);
         // Generate the SRS
         let srs = Marlin::<$field, MarlinKZG10<$pairing_engine, DensePolynomial<$field>>, Blake2s>
-            ::universal_setup(cs.num_constraints(), cs.num_witness_variables() + 1,  matrices.a_num_non_zero, rng)
+            ::universal_setup(cs.num_constraints(), cs.num_witness_variables() + 1,  num_non_zeros, rng)
             .unwrap();
 
         // Generate the setup
@@ -230,6 +235,10 @@ fn main() {
         ("fibonacci", "mnt6_753") => {bench!(FibonacciCircuit, MNT6BigFr, MNT6_753, rounds);},
 
         ("sum", "bls12_381") => {bench!(SumCircuit, Bls381Fr, Bls12_381, rounds);},
+
+        ("fibonacci2", "bls12_381") => {bench!(Fibonacci2Circuit, Bls381Fr, Bls12_381, rounds);},
+
+        ("fibonacci3", "bls12_381") => {bench!(Fibonacci3Circuit, Bls381Fr, Bls12_381, rounds);},
 
         _ => print_panic!("Invalid circuit {} or curve {}", circuit_name, curve_name)
     }
