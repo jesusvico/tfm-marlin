@@ -21,6 +21,7 @@ The result is in `target/release`. Get help about the program:
 ```bash
 make tests
 ```
+The results are stored in the `logs` folder and the CSVs in the `csv` folder.
 
 ## Delete the data
 
