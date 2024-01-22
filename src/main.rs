@@ -16,10 +16,10 @@ mod sumprod_circuit;
 use printers::*;
 
 use ark_relations::r1cs::{ConstraintSystem, ConstraintSynthesizer, OptimizationGoal};
+use circuit_traits::BenchCircuit;
 use basic_circuit::BasicCircuit;
 use addition_circuit::AdditionCircuit;
 use product_circuit::ProductCircuit;
-use circuit_traits::BenchCircuit;
 use dense_circuit::DenseCircuit;
 use fibonacci_circuit::FibonacciCircuit;
 use fibonacci2_circuit::Fibonacci2Circuit;
@@ -46,7 +46,9 @@ use num_bigint::BigUint;
 #[command(author, version, about, long_about = None)]
 struct Args {
     /// Circuit to test
-    #[arg(short, long, default_value = "basic")]
+    #[arg(short, long, default_value = "basic", 
+        help = "Options: addition, product, dense, fibonacci, fibonacci1, fibonacci2, fibonacci3, sum, sumprod"
+    )]
     system: String,
 
     /// Number of rounds
@@ -54,7 +56,9 @@ struct Args {
     rounds: usize,
 
     // Field used by the system
-    #[arg(short, long, default_value = "bls12_381")]
+    #[arg(short, long, default_value = "bls12_381",
+        help = "Options: bls12_377, bls12_381, mnt4_298, mnt4_753, mnt6_298, mnt6_753"
+    )]
     curve: String,
 }
 
@@ -220,13 +224,6 @@ fn main() {
         ("dense", "mnt6_298") => {bench!(DenseCircuit, MNT6Fr, MNT6_298, rounds);},
         ("dense", "mnt6_753") => {bench!(DenseCircuit, MNT6BigFr, MNT6_753, rounds);},
 
-        ("sumprod", "bls12_381") => {bench!(SumProdCircuit, Bls381Fr, Bls12_381, rounds);},
-        ("sumprod", "bls12_377") => {bench!(SumProdCircuit, Bls377Fr, Bls12_377, rounds);},
-        ("sumprod", "mnt4_298") => {bench!(SumProdCircuit, MNT4Fr, MNT4_298, rounds);},
-        ("sumprod", "mnt4_753") => {bench!(SumProdCircuit, MNT4BigFr, MNT4_753, rounds);},
-        ("sumprod", "mnt6_298") => {bench!(SumProdCircuit, MNT6Fr, MNT6_298, rounds);},
-        ("sumprod", "mnt6_753") => {bench!(SumProdCircuit, MNT6BigFr, MNT6_753, rounds);},
-
         ("fibonacci", "bls12_381") => {bench!(FibonacciCircuit, Bls381Fr, Bls12_381, rounds);},
         ("fibonacci", "bls12_377") => {bench!(FibonacciCircuit, Bls377Fr, Bls12_377, rounds);},
         ("fibonacci", "mnt4_298") => {bench!(FibonacciCircuit, MNT4Fr, MNT4_298, rounds);},
@@ -234,11 +231,33 @@ fn main() {
         ("fibonacci", "mnt6_298") => {bench!(FibonacciCircuit, MNT6Fr, MNT6_298, rounds);},
         ("fibonacci", "mnt6_753") => {bench!(FibonacciCircuit, MNT6BigFr, MNT6_753, rounds);},
 
-        ("sum", "bls12_381") => {bench!(SumCircuit, Bls381Fr, Bls12_381, rounds);},
-
         ("fibonacci2", "bls12_381") => {bench!(Fibonacci2Circuit, Bls381Fr, Bls12_381, rounds);},
+        ("fibonacci2", "bls12_377") => {bench!(Fibonacci2Circuit, Bls377Fr, Bls12_377, rounds);},
+        ("fibonacci2", "mnt4_298") => {bench!(Fibonacci2Circuit, MNT4Fr, MNT4_298, rounds);},
+        ("fibonacci2", "mnt4_753") => {bench!(Fibonacci2Circuit, MNT4BigFr, MNT4_753, rounds);},
+        ("fibonacci2", "mnt6_298") => {bench!(Fibonacci2Circuit, MNT6Fr, MNT6_298, rounds);},
+        ("fibonacci2", "mnt6_753") => {bench!(Fibonacci2Circuit, MNT6BigFr, MNT6_753, rounds);},
 
         ("fibonacci3", "bls12_381") => {bench!(Fibonacci3Circuit, Bls381Fr, Bls12_381, rounds);},
+        ("fibonacci3", "bls12_377") => {bench!(Fibonacci3Circuit, Bls377Fr, Bls12_377, rounds);},
+        ("fibonacci3", "mnt4_298") => {bench!(Fibonacci3Circuit, MNT4Fr, MNT4_298, rounds);},
+        ("fibonacci3", "mnt4_753") => {bench!(Fibonacci3Circuit, MNT4BigFr, MNT4_753, rounds);},
+        ("fibonacci3", "mnt6_298") => {bench!(Fibonacci3Circuit, MNT6Fr, MNT6_298, rounds);},
+        ("fibonacci3", "mnt6_753") => {bench!(Fibonacci3Circuit, MNT6BigFr, MNT6_753, rounds);},
+
+        ("sum", "bls12_381") => {bench!(SumCircuit, Bls381Fr, Bls12_381, rounds);},
+        ("sum", "bls12_377") => {bench!(SumCircuit, Bls377Fr, Bls12_377, rounds);},
+        ("sum", "mnt4_298") => {bench!(SumCircuit, MNT4Fr, MNT4_298, rounds);},
+        ("sum", "mnt4_753") => {bench!(SumCircuit, MNT4BigFr, MNT4_753, rounds);},
+        ("sum", "mnt6_298") => {bench!(SumCircuit, MNT6Fr, MNT6_298, rounds);},
+        ("sum", "mnt6_753") => {bench!(SumCircuit, MNT6BigFr, MNT6_753, rounds);},
+
+        ("sumprod", "bls12_381") => {bench!(SumProdCircuit, Bls381Fr, Bls12_381, rounds);},
+        ("sumprod", "bls12_377") => {bench!(SumProdCircuit, Bls377Fr, Bls12_377, rounds);},
+        ("sumprod", "mnt4_298") => {bench!(SumProdCircuit, MNT4Fr, MNT4_298, rounds);},
+        ("sumprod", "mnt4_753") => {bench!(SumProdCircuit, MNT4BigFr, MNT4_753, rounds);},
+        ("sumprod", "mnt6_298") => {bench!(SumProdCircuit, MNT6Fr, MNT6_298, rounds);},
+        ("sumprod", "mnt6_753") => {bench!(SumProdCircuit, MNT6BigFr, MNT6_753, rounds);},
 
         _ => print_panic!("Invalid circuit {} or curve {}", circuit_name, curve_name)
     }
